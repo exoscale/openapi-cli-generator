@@ -507,9 +507,11 @@ func toGoName(input string, public bool) string {
 }
 
 func escapeString(value string) string {
-	transformed := strings.Replace(value, "\n", "\\n", -1)
-	transformed = strings.Replace(transformed, "\"", "\\\"", -1)
-	return transformed
+	// safely escapes special characters in a string
+	q := strconv.Quote(value)
+
+	// Remove the first and last character (surrounding quotes)
+	return q[1 : len(q)-1]
 }
 
 func slug(operationID string) string {

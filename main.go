@@ -144,7 +144,7 @@ type OpenAPI struct {
 
 // ProcessAPI returns the API description to be used with the commands template
 // for a loaded and dereferenced OpenAPI 3 document.
-func ProcessAPI(shortName string, api *openapi3.Swagger) *OpenAPI {
+func ProcessAPI(shortName string, api *openapi3.T) *OpenAPI {
 	apiName := shortName
 	if api.Info.Extensions[ExtName] != nil {
 		apiName = extStr(api.Info.Extensions[ExtName])
@@ -226,14 +226,11 @@ func ProcessAPI(shortName string, api *openapi3.Swagger) *OpenAPI {
 	// Convenience map for operation ID -> operation
 	operationMap := make(map[string]*Operation)
 
-	var paths []string
-	for path := range api.Paths {
-		paths = append(paths, path)
-	}
+	paths := api.Paths.InMatchingOrder()
 	sort.Strings(paths)
 
 	for _, path := range paths {
-		pathItem := api.Paths[path]
+		pathItem := api.Paths.Find(path)
 
 		if pathItem.Extensions[ExtIgnore] != nil {
 			// Ignore this path.
@@ -344,7 +341,7 @@ func ProcessAPI(shortName string, api *openapi3.Swagger) *OpenAPI {
 
 			returnType := "interface{}"
 		returnTypeLoop:
-			for code, ref := range operation.Responses {
+			for code, ref := range operation.Responses.Map() {
 				if num, err := strconv.Atoi(code); err != nil || num < 200 || num >= 300 {
 					// Skip invalid responses
 					continue
@@ -358,7 +355,8 @@ func ProcessAPI(shortName string, api *openapi3.Swagger) *OpenAPI {
 						}
 
 						if content.Schema != nil && content.Schema.Value != nil {
-							if content.Schema.Value.Type == "object" || len(content.Schema.Value.Properties) != 0 {
+						// Type is a []string in OAS 3.1; Is() checks for a single-value match.
+						if content.Schema.Value.Type.Is("object") || len(content.Schema.Value.Properties) != 0 {
 								returnType = "map[string]interface{}"
 								break returnTypeLoop
 							}
@@ -543,15 +541,16 @@ func getParams(path *openapi3.PathItem, httpMethod string) []*Param {
 		if p.Value != nil && p.Value.Extensions["x-cli-ignore"] == nil {
 			t := "string"
 			tn := "\"\""
-			if p.Value.Schema != nil && p.Value.Schema.Value != nil && p.Value.Schema.Value.Type != "" {
-				switch p.Value.Schema.Value.Type {
-				case "boolean":
+			if p.Value.Schema != nil && p.Value.Schema.Value != nil && p.Value.Schema.Value.Type != nil {
+				// Use Includes rather than Is so that ["integer", "null"] still maps correctly.
+				switch {
+				case p.Value.Schema.Value.Type.Includes("boolean"):
 					t = "bool"
 					tn = "false"
-				case "integer":
+				case p.Value.Schema.Value.Type.Includes("integer"):
 					t = "int64"
 					tn = "0"
-				case "number":
+				case p.Value.Schema.Value.Type.Includes("number"):
 					t = "float64"
 					tn = "0.0"
 				}
@@ -717,9 +716,9 @@ func generate(cmd *cobra.Command, args []string) {
 	}
 
 	// Load the OpenAPI document.
-	loader := openapi3.NewSwaggerLoader()
-	var swagger *openapi3.Swagger
-	swagger, err = loader.LoadSwaggerFromData(data)
+	loader := openapi3.NewLoader()
+	var swagger *openapi3.T
+	swagger, err = loader.LoadFromData(data)
 	if err != nil {
 		log.Fatal(err)
 	}

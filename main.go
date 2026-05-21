@@ -355,8 +355,8 @@ func ProcessAPI(shortName string, api *openapi3.T) *OpenAPI {
 						}
 
 						if content.Schema != nil && content.Schema.Value != nil {
-						// Type is a []string in OAS 3.1; Is() checks for a single-value match.
-						if content.Schema.Value.Type.Is("object") || len(content.Schema.Value.Properties) != 0 {
+							// Type is a []string in OAS 3.1; Is() checks for a single-value match.
+							if content.Schema.Value.Type.Is("object") || len(content.Schema.Value.Properties) != 0 {
 								returnType = "map[string]interface{}"
 								break returnTypeLoop
 							}
